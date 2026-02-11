@@ -27,6 +27,9 @@ export const documentQueue = new Queue('document-processing', defaultQueueOption
 // Reconciliation Queue
 export const reconciliationQueue = new Queue('reconciliation', defaultQueueOptions);
 
+// Matching Queue
+export const matchingQueue = new Queue('po-invoice-matching', defaultQueueOptions);
+
 // Email Queue
 export const emailQueue = new Queue('email', defaultQueueOptions);
 
@@ -35,5 +38,6 @@ logger.info('BullMQ queues initialized');
 export const queues = {
   document: documentQueue,
   reconciliation: reconciliationQueue,
+  matching: matchingQueue,
   email: emailQueue,
 };

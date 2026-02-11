@@ -12,8 +12,10 @@ import vendorsRoutes from './routes/vendors';
 import customersRoutes from './routes/customers';
 import skusRoutes from './routes/skus';
 import discountTermsRoutes from './routes/discount-terms';
+import poInvoiceMatchesRoutes from './routes/po-invoice-matches';
 import { authenticate } from './lib/middleware';
 import { startDocumentWorker } from './workers/document-worker';
+import { startMatchingWorker } from './workers/matching-worker';
 
 const fastify = Fastify({
   logger,
@@ -58,6 +60,7 @@ async function start() {
     await fastify.register(customersRoutes, { prefix: '/api/customers' });
     await fastify.register(skusRoutes, { prefix: '/api/skus' });
     await fastify.register(discountTermsRoutes, { prefix: '/api/discount-terms' });
+    await fastify.register(poInvoiceMatchesRoutes, { prefix: '/api/po-invoice-matches' });
 
     // Additional routes will be registered here as we build modules
     // etc.
@@ -70,10 +73,12 @@ async function start() {
 
     // Start background workers
     startDocumentWorker();
+    startMatchingWorker();
 
     logger.info(`🚀 API server running on http://${host}:${port}`);
     logger.info(`📊 Health check: http://${host}:${port}/api/health`);
     logger.info(`⚙️  Document processing worker started`);
+    logger.info(`🔗 PO-Invoice matching worker started`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
