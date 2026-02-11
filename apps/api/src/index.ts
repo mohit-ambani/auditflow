@@ -6,6 +6,8 @@ import cookie from '@fastify/cookie';
 import websocket from '@fastify/websocket';
 import logger from './lib/logger';
 import healthRoutes from './routes/health';
+import authRoutes from './routes/auth';
+import { authenticate } from './lib/middleware';
 
 const fastify = Fastify({
   logger,
@@ -39,11 +41,14 @@ async function start() {
 
     await fastify.register(websocket);
 
+    // Decorate fastify with authenticate method
+    fastify.decorate('authenticate', authenticate);
+
     // Register routes
     await fastify.register(healthRoutes, { prefix: '/api' });
+    await fastify.register(authRoutes, { prefix: '/api/auth' });
 
     // Additional routes will be registered here as we build modules
-    // await fastify.register(authRoutes, { prefix: '/api/auth' });
     // await fastify.register(uploadRoutes, { prefix: '/api/uploads' });
     // etc.
 

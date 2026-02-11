@@ -18,10 +18,15 @@ class ApiClient {
     options?: RequestInit
   ): Promise<ApiResponse<T>> {
     try {
+      // Get token from localStorage
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
+        credentials: 'include', // Include cookies
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...options?.headers,
         },
       });
