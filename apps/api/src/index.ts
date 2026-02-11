@@ -9,6 +9,7 @@ import healthRoutes from './routes/health';
 import authRoutes from './routes/auth';
 import uploadsRoutes from './routes/uploads';
 import { authenticate } from './lib/middleware';
+import { startDocumentWorker } from './workers/document-worker';
 
 const fastify = Fastify({
   logger,
@@ -59,8 +60,12 @@ async function start() {
 
     await fastify.listen({ port, host });
 
+    // Start background workers
+    startDocumentWorker();
+
     logger.info(`🚀 API server running on http://${host}:${port}`);
     logger.info(`📊 Health check: http://${host}:${port}/api/health`);
+    logger.info(`⚙️  Document processing worker started`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

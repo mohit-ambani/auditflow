@@ -7,6 +7,7 @@ import {
   getFileMetadata,
   listFiles,
 } from '../services/file-storage';
+import { queueDocumentProcessing } from '../workers/document-worker';
 import { prisma } from '../lib/prisma';
 
 const ACCEPTED_MIME_TYPES = [
@@ -94,6 +95,9 @@ export default async function uploadsRoutes(fastify: FastifyInstance) {
               ...result,
               downloadUrl,
             });
+
+            // Queue document for processing
+            await queueDocumentProcessing(result.id, user.orgId);
           }
         }
 
