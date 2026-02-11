@@ -44,6 +44,7 @@ model Organization {
   discountTerms   DiscountTerm[]
   emailTemplates  EmailTemplate[]
   settings        OrganizationSettings?
+  chatConversations ChatConversation[]
 }
 
 model User {
@@ -57,6 +58,7 @@ model User {
   createdAt       DateTime @default(now())
 
   auditLogs       AuditLog[]
+  chatConversations ChatConversation[]
 }
 
 enum UserRole {
@@ -809,6 +811,7 @@ model UploadedFile {
   bankStatements   BankStatement[]
   gstReturns       GSTReturn[]
   creditDebitNotes CreditDebitNote[]
+  chatAttachments  ChatAttachment[]
 }
 
 enum DocumentType {
@@ -889,4 +892,65 @@ model AuditLog {
 
   @@index([orgId, entityType, entityId])
   @@index([orgId, createdAt])
+}
+
+// ============================================================
+// AI CHAT SYSTEM
+// ============================================================
+
+model ChatConversation {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  messages        ChatMessage[]
+
+  @@index([orgId, userId])
+  @@index([createdAt])
+}
+
+model ChatMessage {
+  id              String   @id @default(cuid())
+  conversationId  String
+  conversation    ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role            MessageRole
+  content         String   @db.Text
+  toolCalls       Json?
+  toolResults     Json?
+  attachments     Json?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+model ChatAttachment {
+  id              String   @id @default(cuid())
+  messageId       String?
+  fileId          String
+  file            UploadedFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  processingStatus ChatProcessingStatus @default(PENDING)
+  extractedSummary String?  @db.Text
+  createdAt       DateTime @default(now())
+
+  @@index([messageId])
+}
+
+enum ChatProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }

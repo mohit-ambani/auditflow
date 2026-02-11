@@ -150,7 +150,7 @@ export default async function poInvoiceMatchesRoutes(fastify: FastifyInstance) {
         if (resolved === 'true') {
           where.resolvedAt = { not: null };
         } else if (resolved === 'false') {
-          where.resolvedAt: null;
+          where.resolvedAt = null;
         }
 
         // Filter by needs review based on match score

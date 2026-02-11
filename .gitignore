@@ -40,8 +40,8 @@ lerna-debug.log*
 *~
 .DS_Store
 
-# Prisma
-apps/api/prisma/migrations/
+# Prisma (keep migrations, they're important!)
+# migrations/ are intentionally committed
 
 # OS
 Thumbs.db

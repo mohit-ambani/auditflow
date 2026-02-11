@@ -16,6 +16,13 @@ import {
   BarChart3,
   Settings,
   Upload,
+  Percent,
+  CheckSquare,
+  Mail,
+  Bell,
+  PackageCheck,
+  FilePlus,
+  MessageSquare,
 } from 'lucide-react';
 
 interface NavItem {
@@ -30,6 +37,11 @@ const navItems: NavItem[] = [
     title: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    title: 'AI Chat',
+    href: '/chat',
+    icon: MessageSquare,
   },
   {
     title: 'Uploads',
@@ -75,6 +87,36 @@ const navItems: NavItem[] = [
     title: 'Customers',
     href: '/customers',
     icon: UserCircle,
+  },
+  {
+    title: 'Discount Terms',
+    href: '/discount-terms',
+    icon: Percent,
+  },
+  {
+    title: 'Discount Audits',
+    href: '/discount-audits',
+    icon: CheckSquare,
+  },
+  {
+    title: 'Vendor Ledger',
+    href: '/vendor-ledger',
+    icon: Mail,
+  },
+  {
+    title: 'Payment Reminders',
+    href: '/payment-reminders',
+    icon: Bell,
+  },
+  {
+    title: 'Inventory',
+    href: '/inventory',
+    icon: PackageCheck,
+  },
+  {
+    title: 'Credit/Debit Notes',
+    href: '/credit-debit-notes',
+    icon: FilePlus,
   },
   {
     title: 'Reconciliation',
@@ -156,8 +198,8 @@ export function Sidebar({ userRole }: SidebarProps) {
 
       <div className="border-t p-4">
         <div className="text-xs text-muted-foreground">
-          <p>Modules 1-4: Complete ✓</p>
-          <p className="mt-1">Module 5: Master Data ✓</p>
+          <p>All Modules: Complete ✓</p>
+          <p className="mt-1">13 Reconciliation Modules Active</p>
         </div>
       </div>
     </aside>

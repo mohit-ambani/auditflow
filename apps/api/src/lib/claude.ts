@@ -7,7 +7,7 @@ const client = new Anthropic({
 export async function extractWithClaude(
   prompt: string,
   documentText: string,
-  model: string = 'claude-3-5-sonnet-20241022'
+  model: string = 'claude-sonnet-4-5-20250929'
 ): Promise<any> {
   try {
     const message = await client.messages.create({

@@ -1,0 +1,43 @@
+TAX INVOICE
+
+ABC Electronics Pvt Ltd
+GSTIN: 29ABCDE1234F1Z5
+Address: 123 MG Road, Bangalore - 560001
+Phone: +91-80-12345678
+Email: sales@abcelectronics.in
+
+BILL TO:
+Demo Organization
+GSTIN: 27AAPFD0000A1Z5
+Address: 456 Park Street, Mumbai - 400001
+
+Invoice No: INV-2025-001
+Invoice Date: 15-Jan-2025
+Due Date: 14-Feb-2025
+PO Reference: PO-2024-456
+
+S.No | Description | HSN | Qty | Unit | Rate | Discount | Taxable Amt | GST Rate | CGST | SGST | IGST | Total
+1 | Laptop Dell Inspiron 15 | 8471 | 5 | PCS | 45000.00 | 2250.00 (5%) | 212500.00 | 18% | 19125.00 | 19125.00 | 0.00 | 250750.00
+2 | Wireless Mouse Logitech | 8471 | 20 | PCS | 800.00 | 0.00 | 16000.00 | 18% | 1440.00 | 1440.00 | 0.00 | 18880.00
+3 | USB Cable Type-C | 8544 | 50 | PCS | 150.00 | 0.00 | 7500.00 | 18% | 675.00 | 675.00 | 0.00 | 8850.00
+
+Subtotal: 236000.00
+Total Discount: 2250.00
+Taxable Amount: 236000.00
+CGST: 21240.00
+SGST: 21240.00
+IGST: 0.00
+Round Off: 0.52
+Grand Total: 278480.00
+
+Amount in Words: Two Lakh Seventy Eight Thousand Four Hundred Eighty Rupees Only
+
+Payment Terms: Net 30 days
+Bank Details: HDFC Bank, A/c: 12345678901, IFSC: HDFC0001234
+
+IRN: 1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7a8b9c0d1e2f
+
+This is a computer generated invoice.
+
+For ABC Electronics Pvt Ltd
+Authorized Signatory

@@ -93,7 +93,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const response = await apiClient.post('/api/auth/register', {
+      const response = await apiClient.post<{ token: string; user: any }>('/api/auth/register', {
         ...orgData,
         ...userData,
       });

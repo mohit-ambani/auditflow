@@ -12,9 +12,16 @@ import vendorsRoutes from './routes/vendors';
 import customersRoutes from './routes/customers';
 import skusRoutes from './routes/skus';
 import discountTermsRoutes from './routes/discount-terms';
+import discountAuditsRoutes from './routes/discount-audits';
+import vendorLedgerRoutes from './routes/vendor-ledger';
+import paymentRemindersRoutes from './routes/payment-reminders';
+import inventoryRoutes from './routes/inventory';
+import creditDebitNotesRoutes from './routes/credit-debit-notes';
+import aiDemoRoutes from './routes/ai-demo';
 import poInvoiceMatchesRoutes from './routes/po-invoice-matches';
 import paymentMatchesRoutes from './routes/payment-matches';
 import gstMatchesRoutes from './routes/gst-matches';
+import chatRoutes from './routes/chat';
 import { authenticate } from './lib/middleware';
 import { startDocumentWorker } from './workers/document-worker';
 import { startMatchingWorker } from './workers/matching-worker';
@@ -62,12 +69,16 @@ async function start() {
     await fastify.register(customersRoutes, { prefix: '/api/customers' });
     await fastify.register(skusRoutes, { prefix: '/api/skus' });
     await fastify.register(discountTermsRoutes, { prefix: '/api/discount-terms' });
+    await fastify.register(discountAuditsRoutes, { prefix: '/api/discount-audits' });
+    await fastify.register(vendorLedgerRoutes, { prefix: '/api/vendor-ledger' });
+    await fastify.register(paymentRemindersRoutes, { prefix: '/api/payment-reminders' });
+    await fastify.register(inventoryRoutes, { prefix: '/api/inventory' });
+    await fastify.register(creditDebitNotesRoutes, { prefix: '/api/credit-debit-notes' });
+    await fastify.register(aiDemoRoutes, { prefix: '/api/ai-demo' });
     await fastify.register(poInvoiceMatchesRoutes, { prefix: '/api/po-invoice-matches' });
     await fastify.register(paymentMatchesRoutes, { prefix: '/api/payment-matches' });
     await fastify.register(gstMatchesRoutes, { prefix: '/api/gst-matches' });
-
-    // Additional routes will be registered here as we build modules
-    // etc.
+    await fastify.register(chatRoutes, { prefix: '/api/chat' });
 
     // Start server
     const port = parseInt(process.env.API_PORT || '4000');

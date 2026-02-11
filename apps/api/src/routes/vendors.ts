@@ -1,8 +1,20 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
-import { validateGSTIN, validatePAN } from '@auditflow/shared';
 import logger from '../lib/logger';
+
+// Validation functions
+function validateGSTIN(gstin: string | null | undefined): boolean {
+  if (!gstin) return false;
+  const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+  return gstinRegex.test(gstin);
+}
+
+function validatePAN(pan: string | null | undefined): boolean {
+  if (!pan) return false;
+  const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+  return panRegex.test(pan);
+}
 
 const createVendorSchema = z.object({
   name: z.string().min(1, 'Vendor name is required'),

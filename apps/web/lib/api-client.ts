@@ -40,10 +40,8 @@ class ApiClient {
         };
       }
 
-      return {
-        success: true,
-        data,
-      };
+      // Return the API response directly (it already has success and data)
+      return data;
     } catch (error) {
       return {
         success: false,

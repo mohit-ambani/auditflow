@@ -30,20 +30,27 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await apiClient.post('/api/auth/login', formData);
+      const response = await apiClient.post<{ token: string; user: any }>('/api/auth/login', formData);
+      console.log('Login response:', response);
 
-      if (response.success) {
+      if (response.success && response.data) {
         // Store token in localStorage
-        if (response.data?.token) {
+        if (response.data.token) {
+          console.log('Storing token:', response.data.token);
           localStorage.setItem('token', response.data.token);
+          localStorage.setItem('user', JSON.stringify(response.data.user));
         }
 
         // Redirect to dashboard
+        console.log('Redirecting to dashboard...');
         router.push('/dashboard');
+        window.location.href = '/dashboard'; // Force redirect
       } else {
+        console.log('Login failed:', response);
         setError(response.error || 'Login failed');
       }
     } catch (err) {
+      console.error('Login error:', err);
       setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
