@@ -1,0 +1,29 @@
+{
+  "name": "auditflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AuditFlow AI - Automated Accounting & Audit System",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean",
+    "db:generate": "cd apps/api && pnpm prisma generate",
+    "db:push": "cd apps/api && pnpm prisma db push",
+    "db:migrate": "cd apps/api && pnpm prisma migrate dev",
+    "db:studio": "cd apps/api && pnpm prisma studio",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

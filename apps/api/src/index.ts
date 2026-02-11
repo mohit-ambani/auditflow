@@ -1,0 +1,74 @@
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
+import jwt from '@fastify/jwt';
+import cookie from '@fastify/cookie';
+import websocket from '@fastify/websocket';
+import logger from './lib/logger';
+import healthRoutes from './routes/health';
+
+const fastify = Fastify({
+  logger,
+  bodyLimit: 26214400, // 25MB
+});
+
+async function start() {
+  try {
+    // Register plugins
+    await fastify.register(cors, {
+      origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+      credentials: true,
+    });
+
+    await fastify.register(multipart, {
+      limits: {
+        fileSize: 26214400, // 25MB
+        files: 10,
+      },
+    });
+
+    await fastify.register(jwt, {
+      secret: process.env.JWT_SECRET || 'your-jwt-secret-change-in-production',
+      cookie: {
+        cookieName: 'token',
+        signed: false,
+      },
+    });
+
+    await fastify.register(cookie);
+
+    await fastify.register(websocket);
+
+    // Register routes
+    await fastify.register(healthRoutes, { prefix: '/api' });
+
+    // Additional routes will be registered here as we build modules
+    // await fastify.register(authRoutes, { prefix: '/api/auth' });
+    // await fastify.register(uploadRoutes, { prefix: '/api/uploads' });
+    // etc.
+
+    // Start server
+    const port = parseInt(process.env.API_PORT || '4000');
+    const host = process.env.API_HOST || '0.0.0.0';
+
+    await fastify.listen({ port, host });
+
+    logger.info(`🚀 API server running on http://${host}:${port}`);
+    logger.info(`📊 Health check: http://${host}:${port}/api/health`);
+  } catch (err) {
+    fastify.log.error(err);
+    process.exit(1);
+  }
+}
+
+// Handle graceful shutdown
+const signals = ['SIGINT', 'SIGTERM'];
+signals.forEach((signal) => {
+  process.on(signal, async () => {
+    logger.info(`${signal} received, shutting down gracefully...`);
+    await fastify.close();
+    process.exit(0);
+  });
+});
+
+start();

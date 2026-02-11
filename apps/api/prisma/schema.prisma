@@ -1,0 +1,892 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// MULTI-TENANT & AUTH
+// ============================================================
+
+model Organization {
+  id              String   @id @default(cuid())
+  name            String
+  gstin           String?  @unique
+  pan             String?
+  address         String?
+  city            String?
+  state           String?
+  pincode         String?
+  phone           String?
+  email           String?
+  financialYearStart Int   @default(4) // April = 4
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users           User[]
+  vendors         Vendor[]
+  customers       Customer[]
+  purchaseOrders  PurchaseOrder[]
+  purchaseInvoices PurchaseInvoice[]
+  salesInvoices   SalesInvoice[]
+  bankStatements  BankStatement[]
+  bankTransactions BankTransaction[]
+  gstReturns      GSTReturn[]
+  creditDebitNotes CreditDebitNote[]
+  skuMaster       SKU[]
+  inventorySnapshots InventorySnapshot[]
+  reconciliationRuns ReconciliationRun[]
+  discountTerms   DiscountTerm[]
+  emailTemplates  EmailTemplate[]
+  settings        OrganizationSettings?
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String
+  passwordHash    String
+  role            UserRole @default(VIEWER)
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  createdAt       DateTime @default(now())
+
+  auditLogs       AuditLog[]
+}
+
+enum UserRole {
+  ADMIN
+  ACCOUNTANT
+  VIEWER
+}
+
+model OrganizationSettings {
+  id                      String   @id @default(cuid())
+  orgId                   String   @unique
+  org                     Organization @relation(fields: [orgId], references: [id])
+  vendorReconcFrequency   ReconcFrequency @default(MONTHLY)
+  customerReminderDays    Int[]    @default([7, 15, 30]) // days after due date
+  autoSendReminders       Boolean  @default(false)
+  autoSendLedgerConfirm   Boolean  @default(false)
+  gstMatchTolerance       Float    @default(1.0) // Rs tolerance for GST matching
+  paymentMatchTolerance   Float    @default(1.0) // Rs tolerance for payment matching
+  inventoryTrackingEnabled Boolean @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+enum ReconcFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+}
+
+// ============================================================
+// MASTER DATA
+// ============================================================
+
+model Vendor {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  name            String
+  gstin           String?
+  pan             String?
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  state           String?
+  pincode         String?
+  contactPerson   String?
+  paymentTermsDays Int?    @default(30)
+  erpVendorCode   String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  purchaseOrders   PurchaseOrder[]
+  purchaseInvoices PurchaseInvoice[]
+  discountTerms    DiscountTerm[]
+  ledgerConfirmations VendorLedgerConfirmation[]
+  creditDebitNotes CreditDebitNote[]
+
+  @@unique([orgId, erpVendorCode])
+  @@unique([orgId, gstin])
+}
+
+model Customer {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  name            String
+  gstin           String?
+  pan             String?
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  state           String?
+  pincode         String?
+  contactPerson   String?
+  creditLimitDays Int?     @default(30)
+  creditLimitAmount Float?
+  erpCustomerCode String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  salesInvoices    SalesInvoice[]
+  ledgerConfirmations CustomerLedgerConfirmation[]
+  creditDebitNotes CreditDebitNote[]
+  paymentReminders PaymentReminder[]
+
+  @@unique([orgId, erpCustomerCode])
+  @@unique([orgId, gstin])
+}
+
+model SKU {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  skuCode         String
+  name            String
+  description     String?
+  hsnCode         String?
+  unit            String   @default("PCS") // PCS, KG, MTR, LTR, BOX, etc.
+  gstRate         Float?   // 5, 12, 18, 28
+  aliases         String[] // Alternative names/codes for fuzzy matching
+  category        String?
+  subCategory     String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  poLineItems       POLineItem[]
+  purchaseLineItems PurchaseInvoiceLineItem[]
+  salesLineItems    SalesInvoiceLineItem[]
+  inventorySnapshots InventorySnapshot[]
+
+  @@unique([orgId, skuCode])
+}
+
+// ============================================================
+// PURCHASE SIDE
+// ============================================================
+
+model PurchaseOrder {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  vendorId        String
+  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  poNumber        String
+  poDate          DateTime
+  expectedDeliveryDate DateTime?
+  totalAmount     Float
+  cgst            Float    @default(0)
+  sgst            Float    @default(0)
+  igst            Float    @default(0)
+  totalWithGst    Float
+  status          POStatus @default(OPEN)
+  notes           String?
+  sourceFileId    String?
+  sourceFile      UploadedFile? @relation(fields: [sourceFileId], references: [id])
+  extractedData   Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lineItems       POLineItem[]
+  matchedInvoices PurchaseInvoiceMatch[]
+
+  @@unique([orgId, poNumber])
+}
+
+enum POStatus {
+  OPEN
+  PARTIALLY_FULFILLED
+  FULFILLED
+  CLOSED
+  CANCELLED
+}
+
+model POLineItem {
+  id              String   @id @default(cuid())
+  poId            String
+  po              PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  skuId           String?
+  sku             SKU?     @relation(fields: [skuId], references: [id])
+  lineNumber      Int
+  description     String
+  quantity        Float
+  unit            String   @default("PCS")
+  unitPrice       Float
+  discountPercent Float?   @default(0)
+  discountAmount  Float?   @default(0)
+  taxableAmount   Float
+  gstRate         Float?
+  cgst            Float?   @default(0)
+  sgst            Float?   @default(0)
+  igst            Float?   @default(0)
+  totalAmount     Float
+  quantityReceived Float   @default(0)
+  createdAt       DateTime @default(now())
+}
+
+model PurchaseInvoice {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  vendorId        String
+  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  invoiceNumber   String
+  invoiceDate     DateTime
+  dueDate         DateTime?
+  totalAmount     Float
+  cgst            Float    @default(0)
+  sgst            Float    @default(0)
+  igst            Float    @default(0)
+  tcs             Float    @default(0)
+  roundOff        Float    @default(0)
+  totalWithGst    Float
+  vendorGstin     String?
+  irn             String?
+  status          InvoiceStatus @default(PENDING)
+  paymentStatus   PaymentStatus @default(UNPAID)
+  amountPaid      Float    @default(0)
+  sourceFileId    String?
+  sourceFile      UploadedFile? @relation(fields: [sourceFileId], references: [id])
+  extractedData   Json?
+  aiConfidence    Float?
+  manualReview    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lineItems       PurchaseInvoiceLineItem[]
+  poMatches       PurchaseInvoiceMatch[]
+  paymentMatches  PaymentMatch[]
+  gstMatches      GSTMatch[]
+  discountAudits  DiscountAudit[]
+
+  @@unique([orgId, vendorId, invoiceNumber])
+}
+
+enum InvoiceStatus {
+  PENDING
+  PROCESSING
+  EXTRACTED
+  VERIFIED
+  MATCHED
+  DISPUTED
+  CLOSED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  OVERPAID
+}
+
+model PurchaseInvoiceLineItem {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  invoice         PurchaseInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  skuId           String?
+  sku             SKU?     @relation(fields: [skuId], references: [id])
+  lineNumber      Int
+  description     String
+  hsnCode         String?
+  quantity        Float
+  unit            String   @default("PCS")
+  unitPrice       Float
+  discountPercent Float?   @default(0)
+  discountAmount  Float?   @default(0)
+  taxableAmount   Float
+  gstRate         Float?
+  cgst            Float?   @default(0)
+  sgst            Float?   @default(0)
+  igst            Float?   @default(0)
+  totalAmount     Float
+  createdAt       DateTime @default(now())
+}
+
+model PurchaseInvoiceMatch {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  invoice         PurchaseInvoice @relation(fields: [invoiceId], references: [id])
+  poId            String
+  po              PurchaseOrder @relation(fields: [poId], references: [id])
+  matchType       MatchType
+  matchScore      Float
+  qtyMatch        Boolean  @default(false)
+  valueMatch      Boolean  @default(false)
+  gstMatch        Boolean  @default(false)
+  discrepancies   Json?
+  resolvedBy      String?
+  resolvedAt      DateTime?
+  resolution      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum MatchType {
+  EXACT
+  PARTIAL_QTY
+  PARTIAL_VALUE
+  PARTIAL_BOTH
+  NO_MATCH
+  MANUAL
+}
+
+// ============================================================
+// SALES SIDE
+// ============================================================
+
+model SalesInvoice {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  customerId      String
+  customer        Customer @relation(fields: [customerId], references: [id])
+  invoiceNumber   String
+  invoiceDate     DateTime
+  dueDate         DateTime?
+  totalAmount     Float
+  cgst            Float    @default(0)
+  sgst            Float    @default(0)
+  igst            Float    @default(0)
+  tcs             Float    @default(0)
+  roundOff        Float    @default(0)
+  totalWithGst    Float
+  customerGstin   String?
+  irn             String?
+  eWayBillNo      String?
+  paymentStatus   PaymentStatus @default(UNPAID)
+  amountReceived  Float    @default(0)
+  sourceFileId    String?
+  sourceFile      UploadedFile? @relation(fields: [sourceFileId], references: [id])
+  extractedData   Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lineItems       SalesInvoiceLineItem[]
+  paymentMatches  PaymentMatch[]
+  gstMatches      GSTMatch[]
+  paymentReminders PaymentReminder[]
+
+  @@unique([orgId, invoiceNumber])
+}
+
+model SalesInvoiceLineItem {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  invoice         SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  skuId           String?
+  sku             SKU?     @relation(fields: [skuId], references: [id])
+  lineNumber      Int
+  description     String
+  hsnCode         String?
+  quantity        Float
+  unit            String   @default("PCS")
+  unitPrice       Float
+  discountPercent Float?   @default(0)
+  discountAmount  Float?   @default(0)
+  taxableAmount   Float
+  gstRate         Float?
+  cgst            Float?   @default(0)
+  sgst            Float?   @default(0)
+  igst            Float?   @default(0)
+  totalAmount     Float
+  createdAt       DateTime @default(now())
+}
+
+// ============================================================
+// BANK TRANSACTIONS
+// ============================================================
+
+model BankStatement {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  bankName        String?
+  accountNumber   String?
+  statementDate   DateTime?
+  fromDate        DateTime?
+  toDate          DateTime?
+  openingBalance  Float?
+  closingBalance  Float?
+  sourceFileId    String?
+  sourceFile      UploadedFile? @relation(fields: [sourceFileId], references: [id])
+  status          ProcessingStatus @default(PENDING)
+  createdAt       DateTime @default(now())
+
+  transactions    BankTransaction[]
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model BankTransaction {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  statementId     String?
+  statement       BankStatement? @relation(fields: [statementId], references: [id])
+  transactionDate DateTime
+  valueDate       DateTime?
+  description     String
+  referenceNumber String?
+  debit           Float?
+  credit          Float?
+  balance         Float?
+  transactionType BankTxnType?
+  matchStatus     BankMatchStatus @default(UNMATCHED)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  paymentMatches  PaymentMatch[]
+
+  @@index([orgId, transactionDate])
+  @@index([orgId, referenceNumber])
+}
+
+enum BankTxnType {
+  NEFT
+  RTGS
+  IMPS
+  UPI
+  CHEQUE
+  CASH_DEPOSIT
+  CASH_WITHDRAWAL
+  BANK_CHARGES
+  INTEREST
+  OTHER
+}
+
+enum BankMatchStatus {
+  UNMATCHED
+  AUTO_MATCHED
+  MANUALLY_MATCHED
+  IGNORED
+}
+
+// ============================================================
+// PAYMENT MATCHING
+// ============================================================
+
+model PaymentMatch {
+  id              String   @id @default(cuid())
+  bankTxnId       String
+  bankTransaction BankTransaction @relation(fields: [bankTxnId], references: [id])
+  purchaseInvoiceId String?
+  purchaseInvoice PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id])
+  salesInvoiceId  String?
+  salesInvoice    SalesInvoice? @relation(fields: [salesInvoiceId], references: [id])
+  matchedAmount   Float
+  matchType       MatchType
+  matchScore      Float
+  discrepancy     Float?   @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@index([purchaseInvoiceId])
+  @@index([salesInvoiceId])
+}
+
+// ============================================================
+// GST MATCHING
+// ============================================================
+
+model GSTReturn {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  returnType      GSTReturnType
+  period          String   // "042024" = April 2024
+  filingDate      DateTime?
+  sourceFileId    String?
+  sourceFile      UploadedFile? @relation(fields: [sourceFileId], references: [id])
+  status          ProcessingStatus @default(PENDING)
+  createdAt       DateTime @default(now())
+
+  entries         GSTReturnEntry[]
+}
+
+enum GSTReturnType {
+  GSTR1
+  GSTR2A
+  GSTR2B
+  GSTR3B
+}
+
+model GSTReturnEntry {
+  id              String   @id @default(cuid())
+  returnId        String
+  return_         GSTReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  counterpartyGstin String
+  counterpartyName String?
+  invoiceNumber   String?
+  invoiceDate     DateTime?
+  invoiceValue    Float?
+  taxableValue    Float?
+  cgst            Float?   @default(0)
+  sgst            Float?   @default(0)
+  igst            Float?   @default(0)
+  cess            Float?   @default(0)
+  placeOfSupply   String?
+  reverseCharge   Boolean  @default(false)
+  itcAvailable    Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  gstMatches      GSTMatch[]
+
+  @@index([counterpartyGstin, invoiceNumber])
+}
+
+model GSTMatch {
+  id              String   @id @default(cuid())
+  gstEntryId      String
+  gstEntry        GSTReturnEntry @relation(fields: [gstEntryId], references: [id])
+  purchaseInvoiceId String?
+  purchaseInvoice PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id])
+  salesInvoiceId  String?
+  salesInvoice    SalesInvoice? @relation(fields: [salesInvoiceId], references: [id])
+  matchType       MatchType
+  matchScore      Float
+  valueDiff       Float?   @default(0)
+  gstDiff         Float?   @default(0)
+  itcStatus       ITCStatus?
+  discrepancies   Json?
+  createdAt       DateTime @default(now())
+}
+
+enum ITCStatus {
+  AVAILABLE
+  NOT_FILED
+  MISMATCH
+  REVERSED
+  INELIGIBLE
+}
+
+// ============================================================
+// CREDIT/DEBIT NOTES
+// ============================================================
+
+model CreditDebitNote {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  noteType        NoteType
+  noteNumber      String
+  noteDate        DateTime
+  vendorId        String?
+  vendor          Vendor?  @relation(fields: [vendorId], references: [id])
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  reason          String?
+  originalInvoiceRef String?
+  totalAmount     Float
+  cgst            Float    @default(0)
+  sgst            Float    @default(0)
+  igst            Float    @default(0)
+  totalWithGst    Float
+  status          NoteStatus @default(PENDING)
+  sourceFileId    String?
+  sourceFile      UploadedFile? @relation(fields: [sourceFileId], references: [id])
+  extractedData   Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([orgId, noteType, noteNumber])
+}
+
+enum NoteType {
+  CREDIT_NOTE_RECEIVED
+  DEBIT_NOTE_ISSUED
+  CREDIT_NOTE_ISSUED
+  DEBIT_NOTE_RECEIVED
+}
+
+enum NoteStatus {
+  PENDING
+  ADJUSTED
+  DISPUTED
+}
+
+// ============================================================
+// DISCOUNT & PENALTY TERMS
+// ============================================================
+
+model DiscountTerm {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  vendorId        String
+  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  termType        DiscountTermType
+  description     String
+  slabs           Json?
+  flatPercent     Float?
+  flatAmount      Float?
+  applicableSkus  String[]
+  minOrderValue   Float?
+  paymentWithinDays Int?
+  latePaymentPenaltyPercent Float?
+  lateDeliveryPenaltyPerDay Float?
+  validFrom       DateTime
+  validTo         DateTime?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum DiscountTermType {
+  TRADE_DISCOUNT
+  CASH_DISCOUNT
+  VOLUME_REBATE
+  LATE_PAYMENT_PENALTY
+  LATE_DELIVERY_PENALTY
+  SPECIAL_SCHEME
+}
+
+model DiscountAudit {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  invoice         PurchaseInvoice @relation(fields: [invoiceId], references: [id])
+  termId          String?
+  expectedDiscount Float
+  actualDiscount  Float
+  difference      Float
+  status          AuditStatus
+  notes           String?
+  createdAt       DateTime @default(now())
+}
+
+enum AuditStatus {
+  CORRECT
+  UNDER_DISCOUNTED
+  OVER_DISCOUNTED
+  PENALTY_MISSING
+  PENALTY_INCORRECT
+  NEEDS_REVIEW
+}
+
+// ============================================================
+// INVENTORY TRACKING
+// ============================================================
+
+model InventorySnapshot {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  skuId           String
+  sku             SKU      @relation(fields: [skuId], references: [id])
+  snapshotDate    DateTime
+  openingQty      Float
+  purchasedQty    Float    @default(0)
+  soldQty         Float    @default(0)
+  adjustmentQty   Float    @default(0)
+  closingQty      Float
+  expectedClosing Float
+  discrepancy     Float    @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@unique([orgId, skuId, snapshotDate])
+  @@index([orgId, snapshotDate])
+}
+
+// ============================================================
+// VENDOR/CUSTOMER LEDGER CONFIRMATIONS
+// ============================================================
+
+model VendorLedgerConfirmation {
+  id              String   @id @default(cuid())
+  vendorId        String
+  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  periodFrom      DateTime
+  periodTo        DateTime
+  ourBalance      Float
+  vendorBalance   Float?
+  difference      Float?
+  status          ConfirmationStatus @default(PENDING)
+  sentAt          DateTime?
+  emailMessageId  String?
+  respondedAt     DateTime?
+  responseNotes   String?
+  ledgerPdfPath   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model CustomerLedgerConfirmation {
+  id              String   @id @default(cuid())
+  customerId      String
+  customer        Customer @relation(fields: [customerId], references: [id])
+  periodFrom      DateTime
+  periodTo        DateTime
+  ourBalance      Float
+  customerBalance Float?
+  difference      Float?
+  status          ConfirmationStatus @default(PENDING)
+  sentAt          DateTime?
+  emailMessageId  String?
+  respondedAt     DateTime?
+  responseNotes   String?
+  ledgerPdfPath   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum ConfirmationStatus {
+  PENDING
+  SENT
+  CONFIRMED
+  DISPUTED
+  NO_RESPONSE
+  RESOLVED
+}
+
+// ============================================================
+// PAYMENT REMINDERS
+// ============================================================
+
+model PaymentReminder {
+  id              String   @id @default(cuid())
+  customerId      String
+  customer        Customer @relation(fields: [customerId], references: [id])
+  salesInvoiceId  String?
+  salesInvoice    SalesInvoice? @relation(fields: [salesInvoiceId], references: [id])
+  reminderNumber  Int
+  dueAmount       Float
+  daysOverdue     Int
+  sentAt          DateTime?
+  emailMessageId  String?
+  status          ReminderStatus @default(PENDING)
+  createdAt       DateTime @default(now())
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  PAYMENT_RECEIVED
+  ESCALATED
+}
+
+// ============================================================
+// FILE MANAGEMENT
+// ============================================================
+
+model UploadedFile {
+  id              String   @id @default(cuid())
+  orgId           String
+  fileName        String
+  originalName    String
+  mimeType        String
+  fileSize        Int
+  storagePath     String
+  documentType    DocumentType
+  processingStatus ProcessingStatus @default(PENDING)
+  extractedText   String?
+  aiExtractionResult Json?
+  uploadedBy      String?
+  createdAt       DateTime @default(now())
+
+  purchaseOrders   PurchaseOrder[]
+  purchaseInvoices PurchaseInvoice[]
+  salesInvoices    SalesInvoice[]
+  bankStatements   BankStatement[]
+  gstReturns       GSTReturn[]
+  creditDebitNotes CreditDebitNote[]
+}
+
+enum DocumentType {
+  PURCHASE_ORDER
+  PURCHASE_INVOICE
+  SALES_INVOICE
+  BANK_STATEMENT
+  GST_RETURN
+  CREDIT_DEBIT_NOTE
+  INVENTORY_UPLOAD
+  VENDOR_MASTER
+  CUSTOMER_MASTER
+  OTHER
+}
+
+// ============================================================
+// EMAIL TEMPLATES
+// ============================================================
+
+model EmailTemplate {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  templateKey     String   // vendor_ledger_confirmation, customer_reminder_1, etc.
+  subject         String
+  bodyHtml        String
+  bodyText        String?
+  variables       String[] // List of available variables: {{vendor_name}}, {{amount}}, etc.
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([orgId, templateKey])
+}
+
+// ============================================================
+// RECONCILIATION TRACKING
+// ============================================================
+
+model ReconciliationRun {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  runType         ReconcRunType
+  status          ProcessingStatus @default(PENDING)
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  summary         Json?
+  triggeredBy     String?
+  createdAt       DateTime @default(now())
+}
+
+enum ReconcRunType {
+  PO_INVOICE
+  INVOICE_PAYMENT
+  GST_RECONCILIATION
+  VENDOR_LEDGER
+  CUSTOMER_LEDGER
+  INVENTORY
+  FULL
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  orgId           String
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id])
+  action          String
+  entityType      String
+  entityId        String
+  changes         Json?
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+
+  @@index([orgId, entityType, entityId])
+  @@index([orgId, createdAt])
+}
