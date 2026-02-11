@@ -15,6 +15,7 @@ import {
   RefreshCw,
   BarChart3,
   Settings,
+  Upload,
 } from 'lucide-react';
 
 interface NavItem {
@@ -29,6 +30,11 @@ const navItems: NavItem[] = [
     title: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    title: 'Uploads',
+    href: '/uploads',
+    icon: Upload,
   },
   {
     title: 'Purchases',
