@@ -14,6 +14,7 @@ import skusRoutes from './routes/skus';
 import discountTermsRoutes from './routes/discount-terms';
 import poInvoiceMatchesRoutes from './routes/po-invoice-matches';
 import paymentMatchesRoutes from './routes/payment-matches';
+import gstMatchesRoutes from './routes/gst-matches';
 import { authenticate } from './lib/middleware';
 import { startDocumentWorker } from './workers/document-worker';
 import { startMatchingWorker } from './workers/matching-worker';
@@ -63,6 +64,7 @@ async function start() {
     await fastify.register(discountTermsRoutes, { prefix: '/api/discount-terms' });
     await fastify.register(poInvoiceMatchesRoutes, { prefix: '/api/po-invoice-matches' });
     await fastify.register(paymentMatchesRoutes, { prefix: '/api/payment-matches' });
+    await fastify.register(gstMatchesRoutes, { prefix: '/api/gst-matches' });
 
     // Additional routes will be registered here as we build modules
     // etc.
