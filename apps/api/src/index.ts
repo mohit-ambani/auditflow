@@ -8,6 +8,10 @@ import logger from './lib/logger';
 import healthRoutes from './routes/health';
 import authRoutes from './routes/auth';
 import uploadsRoutes from './routes/uploads';
+import vendorsRoutes from './routes/vendors';
+import customersRoutes from './routes/customers';
+import skusRoutes from './routes/skus';
+import discountTermsRoutes from './routes/discount-terms';
 import { authenticate } from './lib/middleware';
 import { startDocumentWorker } from './workers/document-worker';
 
@@ -50,6 +54,10 @@ async function start() {
     await fastify.register(healthRoutes, { prefix: '/api' });
     await fastify.register(authRoutes, { prefix: '/api/auth' });
     await fastify.register(uploadsRoutes, { prefix: '/api/uploads' });
+    await fastify.register(vendorsRoutes, { prefix: '/api/vendors' });
+    await fastify.register(customersRoutes, { prefix: '/api/customers' });
+    await fastify.register(skusRoutes, { prefix: '/api/skus' });
+    await fastify.register(discountTermsRoutes, { prefix: '/api/discount-terms' });
 
     // Additional routes will be registered here as we build modules
     // etc.

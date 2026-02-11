@@ -62,6 +62,11 @@ const navItems: NavItem[] = [
     icon: Package,
   },
   {
+    title: 'SKUs',
+    href: '/skus',
+    icon: Package,
+  },
+  {
     title: 'Vendors',
     href: '/vendors',
     icon: Users,
@@ -151,8 +156,8 @@ export function Sidebar({ userRole }: SidebarProps) {
 
       <div className="border-t p-4">
         <div className="text-xs text-muted-foreground">
-          <p>Module 2: Auth Complete ✓</p>
-          <p className="mt-1">Module 3: Next Step</p>
+          <p>Modules 1-4: Complete ✓</p>
+          <p className="mt-1">Module 5: Master Data ✓</p>
         </div>
       </div>
     </aside>
