@@ -2,7 +2,7 @@ import { Worker, Job } from 'bullmq';
 import { documentQueue } from '../lib/bullmq';
 import { redis } from '../lib/redis';
 import logger from '../lib/logger';
-import { getPresignedUrl } from '../services/file-storage';
+import { getFileBuffer } from '../services/file-storage-local';
 import { parsePDF } from '../services/parsers/pdf-parser';
 import { parseExcel, parseCSV, detectGSTReturnType, parseGSTR2, parseBankStatement } from '../services/parsers/excel-parser';
 import { parseImage } from '../services/parsers/image-parser';
@@ -49,10 +49,8 @@ async function processDocument(job: Job<DocumentJobData>) {
       throw new Error('File not found');
     }
 
-    // 2. Download file from S3
-    const downloadUrl = await getPresignedUrl(file.storagePath);
-    const response = await fetch(downloadUrl);
-    const buffer = Buffer.from(await response.arrayBuffer());
+    // 2. Read file from local storage
+    const buffer = await getFileBuffer(file.storagePath);
 
     // 3. Parse file based on type
     let parsedText = '';
@@ -198,10 +196,9 @@ async function processDocument(job: Job<DocumentJobData>) {
             extractionConfidence,
             overallConfidence,
             validation,
+            manualReview,
           },
         },
-        aiConfidence: overallConfidence,
-        manualReview,
         processingStatus: 'COMPLETED',
       },
     });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { apiClient } from '@/lib/api-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,17 +41,17 @@ export default function DashboardPage() {
     async function fetchStats() {
       try {
         const [uploads, poMatches, paymentMatches, gstMatches, vendors, customers, skus] = await Promise.all([
-          fetch('/api/uploads/stats', { credentials: 'include' }).then(r => r.json()).catch(() => ({ data: { total: 0, processing: 0, completed: 0, failed: 0 } })),
-          fetch('/api/po-invoice-matches/stats', { credentials: 'include' }).then(r => r.json()).catch(() => ({ data: { totalMatches: 0, exactMatches: 0, partialMatches: 0, needsReview: 0 } })),
-          fetch('/api/payment-matches/stats', { credentials: 'include' }).then(r => r.json()).catch(() => ({ data: { totalMatches: 0, unmatchedTxns: 0 } })),
-          fetch('/api/gst-matches/stats', { credentials: 'include' }).then(r => r.json()).catch(() => ({ data: { totalMatches: 0, itcAvailable: 0, itcMismatch: 0 } })),
-          fetch('/api/vendors?limit=1', { credentials: 'include' }).then(r => r.json()).catch(() => ({ data: { total: 0 } })),
-          fetch('/api/customers?limit=1', { credentials: 'include' }).then(r => r.json()).catch(() => ({ data: { total: 0 } })),
-          fetch('/api/skus?limit=1', { credentials: 'include' }).then(r => r.json()).catch(() => ({ data: { total: 0 } })),
+          apiClient.get('/api/uploads/stats').catch(() => ({ data: { total: 0, processing: 0, completed: 0, failed: 0 } })),
+          apiClient.get('/api/po-invoice-matches/stats').catch(() => ({ data: { totalMatches: 0, exactMatches: 0, partialMatches: 0, needsReview: 0 } })),
+          apiClient.get('/api/payment-matches/stats').catch(() => ({ data: { totalMatches: 0, unmatchedTxns: 0 } })),
+          apiClient.get('/api/gst-matches/stats').catch(() => ({ data: { totalMatches: 0, itcAvailable: 0, itcMismatch: 0 } })),
+          apiClient.get('/api/vendors?limit=1').catch(() => ({ data: { total: 0 } })),
+          apiClient.get('/api/customers?limit=1').catch(() => ({ data: { total: 0 } })),
+          apiClient.get('/api/skus?limit=1').catch(() => ({ data: { total: 0 } })),
         ]);
 
         setStats({
-          uploads: uploads.data || { total: 0, processing: 0, completed: 0, failed: 0 },
+          uploads: (uploads.data as { total: number; processing: number; completed: number; failed: number }) || { total: 0, processing: 0, completed: 0, failed: 0 },
           poMatches: {
             total: poMatches.data?.totalMatches || 0,
             exact: poMatches.data?.exactMatches || 0,

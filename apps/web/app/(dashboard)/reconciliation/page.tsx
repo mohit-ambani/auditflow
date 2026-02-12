@@ -26,40 +26,44 @@ export default function ReconciliationPage() {
 
   const modules = [
     {
-      id: 'po-invoice',
+      id: 'po-invoice-matches',
       name: 'PO-Invoice Matching',
       icon: GitCompare,
       description: 'Match purchase orders with invoices',
       status: 'active',
       stats: { total: 0, matched: 0, pending: 0 },
       color: 'blue',
+      href: '/purchases', // Main purchases page includes PO-Invoice matching
     },
     {
-      id: 'payment',
+      id: 'payment-matches',
       name: 'Payment Reconciliation',
       icon: CreditCard,
       description: 'Match bank transactions with invoices',
       status: 'active',
       stats: { total: 0, matched: 0, unmatched: 0 },
       color: 'green',
+      href: '/bank', // Bank page includes payment matching
     },
     {
-      id: 'gst',
+      id: 'gst-matches',
       name: 'GST Reconciliation',
       icon: Receipt,
       description: 'Reconcile GSTR data with invoices',
       status: 'active',
       stats: { total: 0, itcAvailable: 0, mismatch: 0 },
       color: 'purple',
+      href: '/gst', // GST page exists
     },
     {
-      id: 'discount',
+      id: 'discount-audits',
       name: 'Discount Validation',
       icon: Percent,
       description: 'Validate discount compliance',
       status: 'active',
       stats: { total: 0, correct: 0, discrepancies: 0 },
       color: 'orange',
+      href: '/discount-audits', // Discount audits page exists
     },
     {
       id: 'vendor-ledger',
@@ -69,6 +73,7 @@ export default function ReconciliationPage() {
       status: 'active',
       stats: { total: 0, confirmed: 0, pending: 0 },
       color: 'indigo',
+      href: '/vendor-ledger', // Vendor ledger page exists
     },
     {
       id: 'payment-reminders',
@@ -78,6 +83,7 @@ export default function ReconciliationPage() {
       status: 'active',
       stats: { total: 0, sent: 0, pending: 0 },
       color: 'red',
+      href: '/payment-reminders', // Payment reminders page exists
     },
     {
       id: 'inventory',
@@ -87,15 +93,17 @@ export default function ReconciliationPage() {
       status: 'active',
       stats: { total: 0, matched: 0, discrepancies: 0 },
       color: 'teal',
+      href: '/inventory', // Inventory page exists
     },
     {
-      id: 'credit-debit',
+      id: 'credit-debit-notes',
       name: 'Credit/Debit Notes',
       icon: FileText,
       description: 'Manage invoice adjustments',
       status: 'active',
       stats: { total: 0, pending: 0, adjusted: 0 },
       color: 'pink',
+      href: '/credit-debit-notes', // Credit/debit notes page exists
     },
   ];
 
@@ -188,15 +196,17 @@ export default function ReconciliationPage() {
                     ))}
                   </div>
                   <div className="flex gap-2 pt-2">
-                    <Link href={`/${module.id}`} className="flex-1">
+                    <Link href={module.href} className="flex-1">
                       <Button variant="outline" size="sm" className="w-full">
                         View Details
                       </Button>
                     </Link>
-                    <Button size="sm" variant="default">
-                      <Play className="h-3 w-3 mr-1" />
-                      Run
-                    </Button>
+                    <Link href={module.href}>
+                      <Button size="sm" variant="default">
+                        <Play className="h-3 w-3 mr-1" />
+                        Open
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               </CardContent>
@@ -214,7 +224,7 @@ export default function ReconciliationPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <Link href="/matches">
+          <Link href="/purchases">
             <Button variant="outline" className="w-full justify-start">
               <GitCompare className="mr-2 h-4 w-4" />
               Match PO-Invoices
@@ -226,14 +236,18 @@ export default function ReconciliationPage() {
               Run Discount Audit
             </Button>
           </Link>
-          <Button variant="outline" className="w-full justify-start">
-            <Bell className="mr-2 h-4 w-4" />
-            Send Reminders
-          </Button>
-          <Button variant="outline" className="w-full justify-start">
-            <Package className="mr-2 h-4 w-4" />
-            Reconcile Inventory
-          </Button>
+          <Link href="/payment-reminders">
+            <Button variant="outline" className="w-full justify-start">
+              <Bell className="mr-2 h-4 w-4" />
+              Send Reminders
+            </Button>
+          </Link>
+          <Link href="/inventory">
+            <Button variant="outline" className="w-full justify-start">
+              <Package className="mr-2 h-4 w-4" />
+              Reconcile Inventory
+            </Button>
+          </Link>
         </CardContent>
       </Card>
 

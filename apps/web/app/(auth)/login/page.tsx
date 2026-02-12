@@ -31,26 +31,24 @@ export default function LoginPage() {
 
     try {
       const response = await apiClient.post<{ token: string; user: any }>('/api/auth/login', formData);
-      console.log('Login response:', response);
 
       if (response.success && response.data) {
         // Store token in localStorage
         if (response.data.token) {
-          console.log('Storing token:', response.data.token);
           localStorage.setItem('token', response.data.token);
           localStorage.setItem('user', JSON.stringify(response.data.user));
         }
 
         // Redirect to dashboard
-        console.log('Redirecting to dashboard...');
         router.push('/dashboard');
         window.location.href = '/dashboard'; // Force redirect
       } else {
-        console.log('Login failed:', response);
         setError(response.error || 'Login failed');
       }
     } catch (err) {
-      console.error('Login error:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Login error:', err);
+      }
       setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -101,6 +99,8 @@ export default function LoginPage() {
                   setFormData({ ...formData, email: e.target.value })
                 }
                 placeholder="your@email.com"
+                pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+                title="Please enter a valid email address"
                 required
                 autoFocus
               />

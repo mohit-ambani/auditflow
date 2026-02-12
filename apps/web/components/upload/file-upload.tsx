@@ -124,7 +124,8 @@ export function FileUpload({
       });
 
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:4000/api/uploads', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${API_URL}/api/uploads`, {
         method: 'POST',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -151,7 +152,8 @@ export function FileUpload({
     }
   };
 
-  const getFileIcon = (mimeType: string) => {
+  const getFileIcon = (mimeType?: string) => {
+    if (!mimeType) return File;
     if (mimeType.startsWith('image/')) return Image;
     if (mimeType === 'application/pdf') return FileText;
     return File;
@@ -220,9 +222,11 @@ export function FileUpload({
 
           {files.map((file, index) => {
             const Icon = getFileIcon(file.type);
+            // Use combination of file name, size, and lastModified as unique key
+            const fileKey = `${file.name}-${file.size}-${file.lastModified || index}`;
 
             return (
-              <Card key={index} className="flex items-center gap-3 p-3">
+              <Card key={fileKey} className="flex items-center gap-3 p-3">
                 {file.preview ? (
                   <img
                     src={file.preview}

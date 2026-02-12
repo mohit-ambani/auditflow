@@ -359,9 +359,9 @@ export default async function gstMatchesRoutes(fastify: FastifyInstance) {
           totalMatches,
           exactMatches,
           partialMatches,
-          itcAvailable,
-          itcMismatch,
           totalITC,
+          availableITCEntries,
+          mismatchITCEntries,
         ] = await Promise.all([
           prisma.gSTMatch.count({
             where: {
@@ -392,26 +392,6 @@ export default async function gstMatchesRoutes(fastify: FastifyInstance) {
               matchType: 'PARTIAL_QTY',
             },
           }),
-          prisma.gSTMatch.count({
-            where: {
-              gstEntry: {
-                return_: {
-                  orgId: user.orgId,
-                },
-              },
-              itcStatus: 'AVAILABLE',
-            },
-          }),
-          prisma.gSTMatch.count({
-            where: {
-              gstEntry: {
-                return_: {
-                  orgId: user.orgId,
-                },
-              },
-              itcStatus: 'MISMATCH',
-            },
-          }),
           prisma.gSTReturnEntry.aggregate({
             where: {
               return_: {
@@ -424,10 +404,56 @@ export default async function gstMatchesRoutes(fastify: FastifyInstance) {
               igst: true,
             },
           }),
+          prisma.gSTMatch.findMany({
+            where: {
+              gstEntry: {
+                return_: {
+                  orgId: user.orgId,
+                },
+              },
+              itcStatus: 'AVAILABLE',
+            },
+            include: {
+              gstEntry: {
+                select: {
+                  cgst: true,
+                  sgst: true,
+                  igst: true,
+                },
+              },
+            },
+          }),
+          prisma.gSTMatch.findMany({
+            where: {
+              gstEntry: {
+                return_: {
+                  orgId: user.orgId,
+                },
+              },
+              itcStatus: { in: ['MISMATCH', 'NOT_FILED', 'REVERSED', 'INELIGIBLE'] },
+            },
+            include: {
+              gstEntry: {
+                select: {
+                  cgst: true,
+                  sgst: true,
+                  igst: true,
+                },
+              },
+            },
+          }),
         ]);
 
         const totalITCValue =
           (totalITC._sum.cgst || 0) + (totalITC._sum.sgst || 0) + (totalITC._sum.igst || 0);
+
+        const availableITCValue = availableITCEntries.reduce((sum, match) => {
+          return sum + (match.gstEntry.cgst || 0) + (match.gstEntry.sgst || 0) + (match.gstEntry.igst || 0);
+        }, 0);
+
+        const blockedITCValue = mismatchITCEntries.reduce((sum, match) => {
+          return sum + (match.gstEntry.cgst || 0) + (match.gstEntry.sgst || 0) + (match.gstEntry.igst || 0);
+        }, 0);
 
         return reply.send({
           success: true,
@@ -435,9 +461,11 @@ export default async function gstMatchesRoutes(fastify: FastifyInstance) {
             totalMatches,
             exactMatches,
             partialMatches,
-            itcAvailable,
-            itcMismatch,
             totalITCValue,
+            availableITCValue,
+            blockedITCValue,
+            itcAvailable: availableITCEntries.length,
+            itcMismatch: mismatchITCEntries.length,
           },
         });
       } catch (error) {

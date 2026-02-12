@@ -43,9 +43,10 @@ export default function CustomersPage() {
       }
 
       const response = await apiClient.get(`/api/customers?${params.toString()}`);
-      if (response.success) {
-        setCustomers(response.data.customers);
-        setTotal(response.data.total);
+      if (response.success && response.data) {
+        const data = response.data as { customers: any[]; total: number };
+        setCustomers(data.customers);
+        setTotal(data.total);
       }
     } catch (error) {
       console.error('Failed to fetch customers:', error);

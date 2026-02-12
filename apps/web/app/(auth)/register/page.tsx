@@ -85,6 +85,16 @@ export default function RegisterPage() {
       return;
     }
 
+    // Validate password strength
+    const hasUpperCase = /[A-Z]/.test(userData.userPassword);
+    const hasLowerCase = /[a-z]/.test(userData.userPassword);
+    const hasNumber = /[0-9]/.test(userData.userPassword);
+
+    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+      setError('Password must contain uppercase, lowercase, and number');
+      return;
+    }
+
     if (userData.userPassword !== userData.confirmPassword) {
       setError('Passwords do not match');
       return;

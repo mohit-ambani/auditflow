@@ -50,13 +50,13 @@ export default function SettingsPage() {
       setOrgData({
         name: organization.name || '',
         gstin: organization.gstin || '',
-        pan: (organization as any).pan || '',
-        email: (organization as any).email || '',
-        phone: (organization as any).phone || '',
-        address: (organization as any).address || '',
-        city: (organization as any).city || '',
-        state: (organization as any).state || '',
-        pincode: (organization as any).pincode || '',
+        pan: organization.pan || '',
+        email: organization.email || '',
+        phone: organization.phone || '',
+        address: organization.address || '',
+        city: organization.city || '',
+        state: organization.state || '',
+        pincode: organization.pincode || '',
       });
     }
   }, [organization]);
@@ -287,6 +287,7 @@ export default function SettingsPage() {
                   })
                 }
                 className="h-4 w-4"
+                aria-label="Enable Inventory Tracking"
               />
               <Label htmlFor="inventoryTracking">Enable Inventory Tracking</Label>
             </div>
@@ -303,6 +304,7 @@ export default function SettingsPage() {
                   })
                 }
                 className="h-4 w-4"
+                aria-label="Auto-send Payment Reminders"
               />
               <Label htmlFor="autoReminders">Auto-send Payment Reminders</Label>
             </div>
@@ -319,6 +321,7 @@ export default function SettingsPage() {
                   })
                 }
                 className="h-4 w-4"
+                aria-label="Auto-send Ledger Confirmations"
               />
               <Label htmlFor="autoLedger">Auto-send Ledger Confirmations</Label>
             </div>

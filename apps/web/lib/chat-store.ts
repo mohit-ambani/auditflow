@@ -23,6 +23,35 @@ export interface SidePanelData {
   data: any;
 }
 
+export interface FileUploadStatus {
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadProgress: number; // 0-100
+  processingStage: 'uploading' | 'parsing' | 'classifying' | 'extracting' | 'validating' | 'ready' | 'saved' | 'error';
+  documentType?: string;
+  confidence?: number;
+  extractedData?: any;
+  issues?: string[];
+  error?: string;
+}
+
+export interface ConfirmationRequest {
+  id: string;
+  action: string; // 'save_invoice', 'save_po', 'accept_match', etc.
+  data: any;
+  message: string;
+  resolved: boolean;
+}
+
+export interface QuickAction {
+  id: string;
+  label: string;
+  prompt: string;
+  icon?: string;
+}
+
 interface ChatState {
   // Conversations
   conversations: Conversation[];
@@ -40,6 +69,11 @@ interface ChatState {
   // File uploads
   uploadingFiles: File[];
   uploadProgress: Record<string, number>;
+
+  // File processing status
+  fileStatuses: Record<string, FileUploadStatus>;
+  pendingConfirmations: ConfirmationRequest[];
+  quickActions: QuickAction[];
 
   // Actions
   setConversations: (conversations: Conversation[]) => void;
@@ -60,6 +94,12 @@ interface ChatState {
   removeUploadingFile: (fileName: string) => void;
   setUploadProgress: (fileName: string, progress: number) => void;
 
+  setFileStatus: (fileId: string, status: Partial<FileUploadStatus>) => void;
+  removeFileStatus: (fileId: string) => void;
+  addConfirmation: (confirmation: ConfirmationRequest) => void;
+  resolveConfirmation: (id: string, accepted: boolean) => void;
+  setQuickActions: (actions: QuickAction[]) => void;
+
   reset: () => void;
 }
 
@@ -74,6 +114,14 @@ export const useChatStore = create<ChatState>((set) => ({
   sidePanelData: null,
   uploadingFiles: [],
   uploadProgress: {},
+  fileStatuses: {},
+  pendingConfirmations: [],
+  quickActions: [
+    { id: 'upload', label: 'Upload Files', prompt: '', icon: 'Upload' },
+    { id: 'unpaid', label: 'Show Unpaid Invoices', prompt: 'Show me all unpaid invoices', icon: 'IndianRupee' },
+    { id: 'gst', label: 'GST Status', prompt: 'Show me GST reconciliation status for this month', icon: 'FileText' },
+    { id: 'dashboard', label: "Today's Summary", prompt: "Give me today's summary - new uploads, pending reconciliations, and key metrics", icon: 'LayoutDashboard' },
+  ],
 
   // Conversation actions
   setConversations: (conversations) => set({ conversations }),
@@ -118,12 +166,43 @@ export const useChatStore = create<ChatState>((set) => ({
     uploadProgress: { ...state.uploadProgress, [fileName]: progress }
   })),
 
+  // File status actions
+  setFileStatus: (fileId, status) => set((state) => ({
+    fileStatuses: {
+      ...state.fileStatuses,
+      [fileId]: {
+        ...state.fileStatuses[fileId],
+        ...status,
+        fileId,
+      } as FileUploadStatus
+    }
+  })),
+  removeFileStatus: (fileId) => set((state) => {
+    const { [fileId]: removed, ...rest } = state.fileStatuses;
+    return { fileStatuses: rest };
+  }),
+
+  // Confirmation actions
+  addConfirmation: (confirmation) => set((state) => ({
+    pendingConfirmations: [...state.pendingConfirmations, confirmation]
+  })),
+  resolveConfirmation: (id, accepted) => set((state) => ({
+    pendingConfirmations: state.pendingConfirmations.map(c =>
+      c.id === id ? { ...c, resolved: true } : c
+    )
+  })),
+
+  // Quick actions
+  setQuickActions: (actions) => set({ quickActions: actions }),
+
   // Reset
   reset: () => set({
     messages: [],
     streamingMessage: '',
     isStreaming: false,
     sidePanelData: null,
-    sidePanelOpen: false
+    sidePanelOpen: false,
+    fileStatuses: {},
+    pendingConfirmations: []
   })
 }));

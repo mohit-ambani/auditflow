@@ -200,6 +200,7 @@ model PurchaseOrder {
   notes           String?
   sourceFileId    String?
   sourceFile      UploadedFile? @relation(fields: [sourceFileId], references: [id])
+  chatSourceMessageId String? // Chat message that triggered creation
   extractedData   Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -264,6 +265,7 @@ model PurchaseInvoice {
   amountPaid      Float    @default(0)
   sourceFileId    String?
   sourceFile      UploadedFile? @relation(fields: [sourceFileId], references: [id])
+  chatSourceMessageId String? // Chat message that triggered creation
   extractedData   Json?
   aiConfidence    Float?
   manualReview    Boolean  @default(false)
@@ -374,7 +376,9 @@ model SalesInvoice {
   amountReceived  Float    @default(0)
   sourceFileId    String?
   sourceFile      UploadedFile? @relation(fields: [sourceFileId], references: [id])
+  chatSourceMessageId String? // Chat message that triggered creation
   extractedData   Json?
+  status          InvoiceStatus @default(PENDING)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -426,6 +430,8 @@ model BankStatement {
   closingBalance  Float?
   sourceFileId    String?
   sourceFile      UploadedFile? @relation(fields: [sourceFileId], references: [id])
+  chatSourceMessageId String? // Chat message that triggered creation
+  transactionCount Int?
   status          ProcessingStatus @default(PENDING)
   createdAt       DateTime @default(now())
 
@@ -937,13 +943,18 @@ enum MessageRole {
 }
 
 model ChatAttachment {
-  id              String   @id @default(cuid())
-  messageId       String?
-  fileId          String
-  file            UploadedFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  messageId        String?
+  fileId           String
+  file             UploadedFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
   processingStatus ChatProcessingStatus @default(PENDING)
   extractedSummary String?  @db.Text
-  createdAt       DateTime @default(now())
+  documentType     String?  // Classified document type
+  confidence       Float?   // Classification confidence (0-1)
+  processingEvents Json?    // Array of {stage, timestamp, result}
+  savedEntityId    String?  // ID of saved entity (invoice, PO, etc.)
+  savedEntityType  String?  // Type of saved entity (PURCHASE_INVOICE, etc.)
+  createdAt        DateTime @default(now())
 
   @@index([messageId])
 }
@@ -953,4 +964,17 @@ enum ChatProcessingStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+model ChatUserAction {
+  id              String   @id @default(cuid())
+  conversationId  String
+  messageId       String?
+  actionType      String   // 'confirm_save', 'reject_save', 'edit_and_save', 'approve_match', etc.
+  entityType      String?  // 'PURCHASE_INVOICE', 'PURCHASE_ORDER', etc.
+  entityId        String?
+  actionData      Json?    // Corrections, notes, etc.
+  createdAt       DateTime @default(now())
+
+  @@index([conversationId])
 }

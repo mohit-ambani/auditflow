@@ -4,7 +4,16 @@ import { matchInvoiceToPO } from './po-invoice-matcher';
 import { generateVendorLedger, createConfirmationRequest, sendConfirmationEmail } from './ledger-confirmation';
 import { generateReminders, sendReminder } from './payment-reminder';
 import { reconcileAllInventory } from './inventory-reconciliation';
+import { classifyDocument } from './document-classifier';
+import { parsePDF } from './parsers/pdf-parser';
+import { parseExcel } from './parsers/excel-parser';
+import { parseImage } from './parsers/image-parser';
+import { uploadFile } from './file-storage-local';
+import { matchPaymentToInvoices } from './payment-matcher';
+import { matchGSTEntryToInvoice } from './gst-reconciliation';
 import logger from '../lib/logger';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 /**
  * Executes tool calls from Claude AI
@@ -53,6 +62,20 @@ export class ChatToolExecutor {
         case 'extract_bank_statement_from_file':
           return await this.extractBankStatementFromFile(toolInput, orgId);
 
+        // File Processing & Auto-Classification Tools
+        case 'classify_and_process_file':
+          return await this.classifyAndProcessFile(toolInput, orgId);
+        case 'get_file_processing_status':
+          return await this.getFileProcessingStatus(toolInput, orgId);
+        case 'process_file_batch':
+          return await this.processFileBatch(toolInput, orgId);
+        case 'save_extracted_data':
+          return await this.saveExtractedData(toolInput, orgId);
+        case 'auto_reconcile_after_save':
+          return await this.autoReconcileAfterSave(toolInput, orgId);
+        case 'present_data_table':
+          return await this.presentDataTable(toolInput, orgId);
+
         // Analytics Tools
         case 'calculate_gst_liability':
           return await this.calculateGSTLiability(toolInput, orgId);
@@ -64,6 +87,8 @@ export class ChatToolExecutor {
           return await this.customerAgingAnalysis(toolInput, orgId);
         case 'get_dashboard_summary':
           return await this.getDashboardSummary(toolInput, orgId);
+        case 'show_dashboard_widget':
+          return await this.showDashboardWidget(toolInput, orgId);
 
         // Action Tools
         case 'create_vendor':
@@ -866,6 +891,19 @@ export class ChatToolExecutor {
     };
   }
 
+  private async showDashboardWidget(input: any, orgId: string) {
+    const { widget_type, data, period } = input;
+
+    // This tool simply returns the widget configuration for the frontend to render
+    // The actual widget rendering happens in the chat UI
+    return {
+      widget_type,
+      data,
+      period: period || 'month',
+      render_as: 'dashboard_widget'
+    };
+  }
+
   // ============================================================
   // ACTION TOOL IMPLEMENTATIONS
   // ============================================================
@@ -1028,5 +1066,565 @@ export class ChatToolExecutor {
       vendor_id: input.vendor_id,
       confirmation_id: confirmation.id
     };
+  }
+
+  // ============================================================
+  // FILE PROCESSING & AUTO-CLASSIFICATION METHODS
+  // ============================================================
+
+  private async classifyAndProcessFile(input: any, orgId: string) {
+    const fileId = input.file_id;
+
+    // Get the uploaded file record
+    const uploadedFile = await this.prisma.uploadedFile.findFirst({
+      where: { id: fileId, orgId }
+    });
+
+    if (!uploadedFile) {
+      throw new Error('File not found');
+    }
+
+    // Read file from storage
+    const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+    const filePath = path.join(uploadDir, uploadedFile.storagePath);
+    const fileBuffer = await fs.readFile(filePath);
+
+    // Parse file based on MIME type
+    let extractedText = '';
+    let metadata: any = {};
+
+    if (uploadedFile.mimeType === 'application/pdf') {
+      const pdfResult = await parsePDF(fileBuffer);
+      extractedText = pdfResult.rawText;
+      metadata = pdfResult.metadata;
+    } else if (uploadedFile.mimeType.includes('excel') || uploadedFile.mimeType === 'text/csv' ||
+               uploadedFile.mimeType.includes('spreadsheet')) {
+      const excelResult = await parseExcel(fileBuffer, uploadedFile.mimeType);
+      extractedText = excelResult.rawText;
+      metadata = { sheets: excelResult.sheets.length };
+    } else if (uploadedFile.mimeType.startsWith('image/')) {
+      const imageResult = await parseImage(fileBuffer);
+      extractedText = imageResult.rawText;
+      metadata = imageResult.metadata;
+    }
+
+    // Classify document
+    const classification = await classifyDocument(extractedText);
+
+    // Extract data based on document type
+    let extractedData: any = null;
+    let confidence = classification.confidence;
+    let arithmeticVerified = false;
+
+    if (classification.documentType === 'PURCHASE_INVOICE' || classification.documentType === 'SALES_INVOICE') {
+      extractedData = await extractPurchaseInvoice(extractedText);
+      arithmeticVerified = extractedData.arithmetic_verified || false;
+      // Adjust confidence based on extraction quality
+      if (extractedData.invoice_number && extractedData.vendor_name && extractedData.grand_total) {
+        confidence = Math.max(confidence, 0.85);
+      }
+    } else if (classification.documentType === 'PURCHASE_ORDER') {
+      extractedData = await extractPurchaseOrder(extractedText);
+      if (extractedData.po_number && extractedData.vendor_name) {
+        confidence = Math.max(confidence, 0.85);
+      }
+    } else if (classification.documentType === 'BANK_STATEMENT') {
+      extractedData = await extractBankStatement(extractedText);
+      if (extractedData.bank_name && extractedData.transactions && extractedData.transactions.length > 0) {
+        confidence = Math.max(confidence, 0.90);
+      }
+    }
+
+    // Update uploaded file record
+    await this.prisma.uploadedFile.update({
+      where: { id: fileId },
+      data: {
+        extractedText,
+        documentType: classification.documentType,
+        aiExtractionResult: extractedData,
+        processingStatus: 'COMPLETED'
+      }
+    });
+
+    const needsReview = confidence < 0.85 || !arithmeticVerified;
+
+    return {
+      file_id: fileId,
+      classification: {
+        document_type: classification.documentType,
+        confidence,
+        reasoning: classification.reasoning
+      },
+      extracted_data: extractedData,
+      arithmetic_verified: arithmeticVerified,
+      needs_manual_review: needsReview,
+      metadata,
+      message: needsReview
+        ? 'Document classified and extracted. Please review the data before saving.'
+        : 'Document classified and extracted successfully. Data looks accurate.'
+    };
+  }
+
+  private async getFileProcessingStatus(input: any, orgId: string) {
+    const uploadedFile = await this.prisma.uploadedFile.findFirst({
+      where: {
+        id: input.file_id,
+        orgId
+      }
+    });
+
+    if (!uploadedFile) {
+      throw new Error('File not found');
+    }
+
+    return {
+      file_id: uploadedFile.id,
+      file_name: uploadedFile.originalName,
+      status: uploadedFile.processingStatus,
+      document_type: uploadedFile.documentType,
+      has_extracted_data: !!uploadedFile.aiExtractionResult,
+      uploaded_at: uploadedFile.createdAt
+    };
+  }
+
+  private async processFileBatch(input: any, orgId: string) {
+    const { file_ids } = input;
+
+    if (!Array.isArray(file_ids) || file_ids.length === 0) {
+      throw new Error('file_ids must be a non-empty array');
+    }
+
+    // Import batch processor
+    const { processBatchFilesSync } = require('./batch-processor');
+
+    // Process all files
+    const results = await processBatchFilesSync(file_ids, this.prisma, orgId);
+
+    // Summary statistics
+    const successCount = results.filter((r: any) => r.success).length;
+    const failureCount = results.filter((r: any) => !r.success).length;
+
+    return {
+      total: file_ids.length,
+      success: successCount,
+      failed: failureCount,
+      results: results.map((r: any) => ({
+        file_id: r.fileId,
+        file_name: r.fileName,
+        success: r.success,
+        document_type: r.documentType,
+        confidence: r.confidence,
+        has_extracted_data: !!r.extractedData,
+        arithmetic_verified: r.extractedData?.arithmetic_verified,
+        error: r.error
+      }))
+    };
+  }
+
+  private async saveExtractedData(input: any, orgId: string) {
+    const { file_id, document_type, extracted_data, corrections } = input;
+
+    // Merge corrections into extracted data
+    const finalData = corrections ? { ...extracted_data, ...corrections } : extracted_data;
+
+    // Save based on document type
+    let savedEntity: any = null;
+    let entityType = document_type;
+
+    if (document_type === 'PURCHASE_INVOICE') {
+      savedEntity = await this.savePurchaseInvoice(finalData, orgId);
+    } else if (document_type === 'PURCHASE_ORDER') {
+      savedEntity = await this.savePurchaseOrder(finalData, orgId);
+    } else if (document_type === 'SALES_INVOICE') {
+      savedEntity = await this.saveSalesInvoice(finalData, orgId);
+    } else if (document_type === 'BANK_STATEMENT') {
+      savedEntity = await this.saveBankStatement(finalData, orgId);
+    } else if (document_type === 'GST_RETURN') {
+      savedEntity = await this.saveGSTReturn(finalData, orgId);
+    } else {
+      throw new Error(`Unsupported document type: ${document_type}`);
+    }
+
+    // Update uploaded file to link to saved entity
+    await this.prisma.uploadedFile.update({
+      where: { id: file_id },
+      data: {
+        processingStatus: 'COMPLETED'
+      }
+    });
+
+    return {
+      success: true,
+      document_type: entityType,
+      document_id: savedEntity.id,
+      document_number: savedEntity.number,
+      message: `${entityType} saved successfully`
+    };
+  }
+
+  private async savePurchaseInvoice(data: any, orgId: string) {
+    // Find or create vendor
+    let vendor = await this.prisma.vendor.findFirst({
+      where: { orgId, gstin: data.vendor_gstin || undefined }
+    });
+
+    if (!vendor && data.vendor_name) {
+      vendor = await this.prisma.vendor.create({
+        data: {
+          orgId,
+          name: data.vendor_name,
+          gstin: data.vendor_gstin,
+          isActive: true
+        }
+      });
+    }
+
+    if (!vendor) {
+      throw new Error('Could not identify vendor');
+    }
+
+    // Create invoice
+    const invoice = await this.prisma.purchaseInvoice.create({
+      data: {
+        orgId,
+        vendorId: vendor.id,
+        invoiceNumber: data.invoice_number,
+        invoiceDate: new Date(data.invoice_date),
+        dueDate: data.due_date ? new Date(data.due_date) : null,
+        totalAmount: data.taxable_total || data.subtotal,
+        cgst: data.cgst_total || 0,
+        sgst: data.sgst_total || 0,
+        igst: data.igst_total || 0,
+        tcs: data.tcs || 0,
+        roundOff: data.round_off || 0,
+        totalWithGst: data.grand_total,
+        vendorGstin: data.vendor_gstin,
+        irn: data.irn,
+        status: 'EXTRACTED',
+        paymentStatus: 'UNPAID',
+        extractedData: data,
+        amountPaid: 0
+      }
+    });
+
+    // Create line items
+    if (data.line_items && Array.isArray(data.line_items)) {
+      for (const item of data.line_items) {
+        await this.prisma.purchaseInvoiceLineItem.create({
+          data: {
+            invoiceId: invoice.id,
+            lineNumber: item.line_number,
+            description: item.description,
+            hsnCode: item.hsn_code,
+            quantity: item.quantity,
+            unit: item.unit || 'PCS',
+            unitPrice: item.unit_price,
+            discountPercent: item.discount_percent || 0,
+            discountAmount: item.discount_amount || 0,
+            taxableAmount: item.taxable_amount,
+            gstRate: item.gst_rate,
+            cgst: item.cgst || 0,
+            sgst: item.sgst || 0,
+            igst: item.igst || 0,
+            totalAmount: item.total
+          }
+        });
+      }
+    }
+
+    return { id: invoice.id, number: invoice.invoiceNumber };
+  }
+
+  private async savePurchaseOrder(data: any, orgId: string) {
+    // Find or create vendor
+    let vendor = await this.prisma.vendor.findFirst({
+      where: { orgId, gstin: data.vendor_gstin || undefined }
+    });
+
+    if (!vendor && data.vendor_name) {
+      vendor = await this.prisma.vendor.create({
+        data: {
+          orgId,
+          name: data.vendor_name,
+          gstin: data.vendor_gstin,
+          isActive: true
+        }
+      });
+    }
+
+    const po = await this.prisma.purchaseOrder.create({
+      data: {
+        orgId,
+        vendorId: vendor!.id,
+        poNumber: data.po_number,
+        poDate: new Date(data.po_date),
+        expectedDeliveryDate: data.expected_delivery_date ? new Date(data.expected_delivery_date) : null,
+        totalAmount: data.grand_total,
+        status: 'OPEN',
+        extractedData: data
+      }
+    });
+
+    // Create line items
+    if (data.line_items && Array.isArray(data.line_items)) {
+      for (const item of data.line_items) {
+        await this.prisma.pOLineItem.create({
+          data: {
+            poId: po.id,
+            lineNumber: item.line_number,
+            description: item.description,
+            hsnCode: item.hsn_code,
+            quantity: item.quantity,
+            unit: item.unit || 'PCS',
+            unitPrice: item.unit_price,
+            totalAmount: item.total
+          }
+        });
+      }
+    }
+
+    return { id: po.id, number: po.poNumber };
+  }
+
+  private async saveSalesInvoice(data: any, orgId: string) {
+    // Find or create customer
+    let customer = await this.prisma.customer.findFirst({
+      where: { orgId, gstin: data.customer_gstin || undefined }
+    });
+
+    if (!customer && data.customer_name) {
+      customer = await this.prisma.customer.create({
+        data: {
+          orgId,
+          name: data.customer_name,
+          gstin: data.customer_gstin,
+          isActive: true
+        }
+      });
+    }
+
+    const invoice = await this.prisma.salesInvoice.create({
+      data: {
+        orgId,
+        customerId: customer!.id,
+        invoiceNumber: data.invoice_number,
+        invoiceDate: new Date(data.invoice_date),
+        totalAmount: data.taxable_total || data.subtotal,
+        cgst: data.cgst_total || 0,
+        sgst: data.sgst_total || 0,
+        igst: data.igst_total || 0,
+        totalWithGst: data.grand_total,
+        status: 'EXTRACTED',
+        paymentStatus: 'UNPAID',
+        extractedData: data,
+        amountReceived: 0
+      }
+    });
+
+    return { id: invoice.id, number: invoice.invoiceNumber };
+  }
+
+  private async saveBankStatement(data: any, orgId: string) {
+    // Create bank statement record
+    const statement = await this.prisma.bankStatement.create({
+      data: {
+        orgId,
+        bankName: data.bank_name,
+        accountNumber: data.account_number,
+        statementDate: new Date(),
+        fromDate: new Date(data.statement_period.split(' to ')[0]),
+        toDate: new Date(data.statement_period.split(' to ')[1]),
+        openingBalance: data.opening_balance,
+        closingBalance: data.closing_balance,
+        transactionCount: data.transactions?.length || 0
+      }
+    });
+
+    // Create transactions
+    if (data.transactions && Array.isArray(data.transactions)) {
+      for (const txn of data.transactions) {
+        await this.prisma.bankTransaction.create({
+          data: {
+            orgId,
+            statementId: statement.id,
+            transactionDate: new Date(txn.date),
+            description: txn.description,
+            referenceNumber: txn.reference_number,
+            debit: txn.debit || null,
+            credit: txn.credit || null,
+            balance: txn.balance,
+            matchStatus: 'UNMATCHED'
+          }
+        });
+      }
+    }
+
+    return { id: statement.id, number: `STMT-${statement.bankName}-${statement.fromDate.toISOString().split('T')[0]}` };
+  }
+
+  private async saveGSTReturn(data: any, orgId: string) {
+    const gstReturn = await this.prisma.gSTReturn.create({
+      data: {
+        orgId,
+        returnType: data.return_type || 'GSTR2A',
+        period: `${data.month}-${data.year}`,
+        filingDate: new Date(),
+        status: 'FILED',
+        entryCount: data.entries?.length || 0
+      }
+    });
+
+    // Create GST entries
+    if (data.entries && Array.isArray(data.entries)) {
+      for (const entry of data.entries) {
+        await this.prisma.gSTReturnEntry.create({
+          data: {
+            returnId: gstReturn.id,
+            counterpartyGstin: entry.gstin,
+            counterpartyName: entry.supplier_name,
+            invoiceNumber: entry.invoice_number,
+            invoiceDate: new Date(entry.invoice_date),
+            invoiceValue: entry.invoice_value,
+            taxableValue: entry.taxable_value,
+            cgst: entry.cgst || 0,
+            sgst: entry.sgst || 0,
+            igst: entry.igst || 0
+          }
+        });
+      }
+    }
+
+    return { id: gstReturn.id, number: `${gstReturn.returnType}-${gstReturn.period}` };
+  }
+
+  private async autoReconcileAfterSave(input: any, orgId: string) {
+    const { document_type, document_id, run_matching = true } = input;
+
+    if (!run_matching) {
+      return { message: 'Auto-reconciliation skipped', matches: [] };
+    }
+
+    const matches: any[] = [];
+
+    if (document_type === 'PURCHASE_INVOICE') {
+      // Find matching PO
+      const invoice = await this.prisma.purchaseInvoice.findUnique({
+        where: { id: document_id }
+      });
+
+      if (invoice) {
+        const pos = await this.prisma.purchaseOrder.findMany({
+          where: {
+            orgId,
+            vendorId: invoice.vendorId,
+            status: { in: ['OPEN', 'PARTIALLY_FULFILLED'] }
+          },
+          take: 5
+        });
+
+        for (const po of pos) {
+          const matchResult = await matchInvoiceToPO(invoice.id, po.id, orgId);
+          if (matchResult.matchScore >= 70) {
+            matches.push({
+              po_id: po.id,
+              po_number: po.poNumber,
+              match_score: matchResult.matchScore,
+              match_type: matchResult.matchType,
+              discrepancies: matchResult.discrepancies
+            });
+          }
+        }
+      }
+    } else if (document_type === 'BANK_STATEMENT') {
+      // Match bank transactions to invoices
+      const transactions = await this.prisma.bankTransaction.findMany({
+        where: {
+          orgId,
+          matchStatus: 'UNMATCHED'
+        },
+        orderBy: { transactionDate: 'desc' },
+        take: 100
+      });
+
+      for (const txn of transactions.slice(0, 10)) {  // Match first 10
+        try {
+          const matchResult = await matchPaymentToInvoices(txn.id, orgId, 'purchase');
+          if (matchResult.bestMatch && matchResult.bestMatch.confidence >= 0.90) {
+            matches.push({
+              transaction_id: txn.id,
+              transaction_date: txn.transactionDate,
+              amount: txn.debit || txn.credit,
+              matched_invoice: matchResult.bestMatch.invoiceNumber,
+              confidence: matchResult.bestMatch.confidence
+            });
+          }
+        } catch (error) {
+          // Continue on error
+        }
+      }
+    }
+
+    return {
+      document_type,
+      document_id,
+      matches_found: matches.length,
+      matches,
+      message: matches.length > 0
+        ? `Found ${matches.length} potential match(es)`
+        : 'No matches found'
+    };
+  }
+
+  private async presentDataTable(input: any, orgId: string) {
+    // This method just returns the table data structure
+    // The actual rendering happens on the frontend via SSE event
+    const { title, columns, rows, summary } = input;
+
+    return {
+      type: 'data_table',
+      title,
+      columns: columns || this.inferColumns(rows),
+      rows,
+      summary,
+      row_count: rows.length
+    };
+  }
+
+  private inferColumns(rows: any[]): any[] {
+    if (!rows || rows.length === 0) return [];
+
+    const firstRow = rows[0];
+    const keys = Object.keys(firstRow);
+
+    return keys.map(key => ({
+      key,
+      label: this.formatColumnLabel(key),
+      format: this.inferColumnFormat(key, firstRow[key])
+    }));
+  }
+
+  private formatColumnLabel(key: string): string {
+    return key.split('_').map(word =>
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  }
+
+  private inferColumnFormat(key: string, value: any): string {
+    if (key.includes('amount') || key.includes('total') || key.includes('price')) {
+      return 'currency';
+    }
+    if (key.includes('date')) {
+      return 'date';
+    }
+    if (key.includes('status')) {
+      return 'status';
+    }
+    if (typeof value === 'number') {
+      return 'number';
+    }
+    if (typeof value === 'boolean') {
+      return 'boolean';
+    }
+    return 'text';
   }
 }

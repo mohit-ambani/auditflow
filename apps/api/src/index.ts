@@ -21,6 +21,7 @@ import aiDemoRoutes from './routes/ai-demo';
 import poInvoiceMatchesRoutes from './routes/po-invoice-matches';
 import paymentMatchesRoutes from './routes/payment-matches';
 import gstMatchesRoutes from './routes/gst-matches';
+import bankTransactionsRoutes from './routes/bank-transactions';
 import chatRoutes from './routes/chat';
 import { authenticate } from './lib/middleware';
 import { startDocumentWorker } from './workers/document-worker';
@@ -78,6 +79,7 @@ async function start() {
     await fastify.register(poInvoiceMatchesRoutes, { prefix: '/api/po-invoice-matches' });
     await fastify.register(paymentMatchesRoutes, { prefix: '/api/payment-matches' });
     await fastify.register(gstMatchesRoutes, { prefix: '/api/gst-matches' });
+    await fastify.register(bankTransactionsRoutes, { prefix: '/api/bank-transactions' });
     await fastify.register(chatRoutes, { prefix: '/api/chat' });
 
     // Start server

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "sonner";
+import { ClientLayout } from "@/components/client-layout";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,8 +20,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AuthProvider>{children}</AuthProvider>
-        <Toaster position="top-right" richColors />
+        <ClientLayout>
+          <AuthProvider>{children}</AuthProvider>
+          <Toaster position="top-right" richColors />
+        </ClientLayout>
       </body>
     </html>
   );

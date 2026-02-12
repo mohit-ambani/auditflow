@@ -15,6 +15,13 @@ interface Organization {
   id: string;
   name: string;
   gstin: string | null;
+  pan?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
 }
 
 interface AuthContextType {

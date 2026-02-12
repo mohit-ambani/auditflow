@@ -242,7 +242,7 @@ export default async function vendorsRoutes(fastify: FastifyInstance) {
               vendorId: id,
               orgId: user.orgId,
             },
-            _sum: { grandTotal: true },
+            _sum: { totalWithGst: true },
           }),
         ]);
 

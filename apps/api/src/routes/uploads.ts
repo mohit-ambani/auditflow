@@ -6,7 +6,8 @@ import {
   deleteFile,
   getFileMetadata,
   listFiles,
-} from '../services/file-storage';
+  getFileBuffer,
+} from '../services/file-storage-local';
 import { queueDocumentProcessing } from '../workers/document-worker';
 import { prisma } from '../lib/prisma';
 
@@ -309,6 +310,60 @@ export default async function uploadsRoutes(fastify: FastifyInstance) {
         return reply.code(500).send({
           success: false,
           error: 'Failed to get upload statistics',
+        });
+      }
+    }
+  );
+
+  /**
+   * GET /api/uploads/file/:storagePath
+   * Serve file from local storage
+   */
+  fastify.get(
+    '/file/*',
+    {
+      onRequest: [fastify.authenticate],
+    },
+    async (request, reply) => {
+      try {
+        const user = request.user as any;
+        // Get storage path from URL (everything after /file/)
+        const storagePath = decodeURIComponent(
+          (request.params as any)['*']
+        );
+
+        // Verify file belongs to user's organization
+        const file = await prisma.uploadedFile.findFirst({
+          where: {
+            storagePath,
+            orgId: user.orgId,
+          },
+        });
+
+        if (!file) {
+          return reply.code(404).send({
+            success: false,
+            error: 'File not found',
+          });
+        }
+
+        // Get file buffer
+        const buffer = await getFileBuffer(storagePath);
+
+        // Set headers and send file
+        reply.header('Content-Type', file.mimeType);
+        reply.header(
+          'Content-Disposition',
+          `inline; filename="${encodeURIComponent(file.originalName)}"`
+        );
+        reply.header('Content-Length', file.fileSize);
+
+        return reply.send(buffer);
+      } catch (error) {
+        fastify.log.error({ error }, 'Serve file error');
+        return reply.code(404).send({
+          success: false,
+          error: 'File not found',
         });
       }
     }
